@@ -708,7 +708,6 @@ const saveSiteContent = async (content: SiteContent) => {
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-r from-[#FFD700] to-[#FF8C00] rounded-full flex items-center justify-center mx-auto mb-4"><Shield size={32} className="text-[#1A2E26]" /></div>
             <h2 className="text-2xl font-light text-white">Admin Access</h2>
-            <p className="text-white/50 text-sm mt-2">Password: admin123</p>
           </div>
           <form onSubmit={handleLogin}>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/50 border border-white/30 focus:outline-none focus:border-[#FFD700] mb-4" />
