@@ -690,7 +690,7 @@ const saveSiteContent = async (content: SiteContent) => {
       loadSiteContent();
       showToast("Login successful!");
     } else {
-      alert("Invalid password. Try: admin123");
+      alert("Invalid password.");
     }
   };
 
