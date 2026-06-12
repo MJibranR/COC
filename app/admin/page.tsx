@@ -50,6 +50,18 @@ import {
 import Link from "next/link";
 
 // Types
+interface CalendarBooking {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  booking_date: string;
+  time_slot: "morning" | "night";
+  hours: number;
+  status: string;
+  created_at: string;
+}
+
 interface Booking {
   id: number;
   name: string;
@@ -185,6 +197,17 @@ interface SiteContent {
     background: string;
     text: string;
   };
+   customSections: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    layout: string;
+    backgroundColor: string;
+    textColor: string;
+    enabled: boolean;
+    items: Array<{ title: string; description: string; icon: string }>;
+  }>;
 }
 
 export default function AdminPage() {
@@ -194,6 +217,19 @@ export default function AdminPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [villas, setVillas] = useState<Villa[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [calendarBookings, setCalendarBookings] = useState<CalendarBooking[]>([]);
+  const [showSectionBuilder, setShowSectionBuilder] = useState(false);
+  const [newSection, setNewSection] = useState({
+    id: Date.now().toString(),
+    title: "",
+    subtitle: "",
+    description: "",
+    layout: "grid",
+    backgroundColor: "#FDFBF7",
+    textColor: "#333333",
+    enabled: true,
+    items: [{ title: "", description: "", icon: "⭐" }]
+  });
   const [siteContent, setSiteContent] = useState<SiteContent>({
     hero: {
       title: "Embrace the Spectrum of Serenity",
@@ -314,6 +350,7 @@ export default function AdminPage() {
       background: "#FDFBF7",
       text: "#333333",
     },
+      customSections: [],
   });
   const [stats, setStats] = useState({ revenue: 0, bookings: 0, guests: 0, views: 12400 });
   const [loading, setLoading] = useState(true);
@@ -333,6 +370,7 @@ export default function AdminPage() {
       setIsAuthenticated(true);
       fetchData();
       loadSiteContent();
+      fetchCalendarBookings();
     }
   }, []);
 
@@ -351,6 +389,42 @@ const fetchData = async () => {
       fetch("/api/contact"),
       fetch("/api/stats"),
     ]);
+
+const fetchCalendarBookings = async () => {
+  try {
+    const res = await fetch("/api/calendar-bookings");
+    const data = await res.json();
+    setCalendarBookings(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("Error fetching calendar bookings:", error);
+  }
+};
+
+const updateCalendarBookingStatus = async (id: number, status: string) => {
+  try {
+    await fetch("/api/calendar-bookings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status }),
+    });
+    fetchCalendarBookings();
+    showToast(`Calendar booking status updated to ${status}`);
+  } catch (error) {
+    showToast("Failed to update booking", "error");
+  }
+};
+
+const deleteCalendarBooking = async (id: number) => {
+  if (confirm("Delete this calendar booking?")) {
+    try {
+      await fetch(`/api/calendar-bookings?id=${id}`, { method: "DELETE" });
+      fetchCalendarBookings();
+      showToast("Calendar booking deleted");
+    } catch (error) {
+      showToast("Failed to delete booking", "error");
+    }
+  }
+};
     
     // Read each response once
     const bookingsData = await bookingsRes.json();
@@ -407,8 +481,7 @@ const saveSiteContent = async (content: SiteContent) => {
   setSiteContent(content);
   
   // Save each section to database
-  const sections = ['hero', 'about', 'villas', 'experiences', 'wellness', 'gallery', 'journal', 'contact', 'footer', 'header', 'colors'];
-  for (const section of sections) {
+const sections = ['hero', 'about', 'villas', 'experiences', 'wellness', 'gallery', 'journal', 'contact', 'footer', 'header', 'colors', 'customSections'];  for (const section of sections) {
     try {
       await fetch("/api/settings", {
         method: "PUT",
@@ -681,6 +754,69 @@ const saveSiteContent = async (content: SiteContent) => {
     }
   };
 
+  // Custom Sections Functions
+const addCustomSection = () => {
+  const updated = { 
+    ...siteContent, 
+    customSections: [...(siteContent.customSections || []), { ...newSection, id: Date.now().toString() }] 
+  };
+  saveSiteContent(updated);
+  setShowSectionBuilder(false);
+  setNewSection({
+    id: Date.now().toString(),
+    title: "",
+    subtitle: "",
+    description: "",
+    layout: "grid",
+    backgroundColor: "#FDFBF7",
+    textColor: "#333333",
+    enabled: true,
+    items: [{ title: "", description: "", icon: "⭐" }]
+  });
+  showToast("Custom section added!");
+};
+
+const updateCustomSection = (index: number, field: string, value: any) => {
+  const updated = { ...siteContent };
+  if (field === 'title') updated.customSections[index].title = value;
+  if (field === 'subtitle') updated.customSections[index].subtitle = value;
+  if (field === 'description') updated.customSections[index].description = value;
+  if (field === 'layout') updated.customSections[index].layout = value;
+  if (field === 'backgroundColor') updated.customSections[index].backgroundColor = value;
+  if (field === 'textColor') updated.customSections[index].textColor = value;
+  if (field === 'enabled') updated.customSections[index].enabled = value;
+  saveSiteContent(updated);
+};
+
+const deleteCustomSection = (index: number) => {
+  if (confirm("Delete this section?")) {
+    const updated = { ...siteContent };
+    updated.customSections = updated.customSections.filter((_, i) => i !== index);
+    saveSiteContent(updated);
+    showToast("Section deleted");
+  }
+};
+
+const addSectionItem = (sectionIndex: number) => {
+  const updated = { ...siteContent };
+  updated.customSections[sectionIndex].items.push({ title: "", description: "", icon: "⭐" });
+  saveSiteContent(updated);
+};
+
+const updateSectionItem = (sectionIndex: number, itemIndex: number, field: string, value: string) => {
+  const updated = { ...siteContent };
+  if (field === 'icon') updated.customSections[sectionIndex].items[itemIndex].icon = value;
+  if (field === 'title') updated.customSections[sectionIndex].items[itemIndex].title = value;
+  if (field === 'description') updated.customSections[sectionIndex].items[itemIndex].description = value;
+  saveSiteContent(updated);
+};
+
+const deleteSectionItem = (sectionIndex: number, itemIndex: number) => {
+  const updated = { ...siteContent };
+  updated.customSections[sectionIndex].items = updated.customSections[sectionIndex].items.filter((_, i) => i !== itemIndex);
+  saveSiteContent(updated);
+};
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === "admin123") {
@@ -794,9 +930,11 @@ const saveSiteContent = async (content: SiteContent) => {
                 { id: "wellness", icon: Heart, label: "Wellness" },
                 { id: "gallery", icon: ImageIcon, label: "Gallery" },
                 { id: "journal", icon: FileText, label: "Journal" },
+                { id: "calendar-bookings", icon: Calendar, label: "Calendar Bookings", count: calendarBookings.length },
                 { id: "contact", icon: Mail, label: "Contact" },
                 { id: "footer", icon: Layout, label: "Footer" },
                 { id: "colors", icon: Palette, label: "Colors & Styling" },
+                { id: "customsections", icon: Layout, label: "Custom Sections", count: siteContent.customSections?.length || 0 },
               ].map((tab) => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-t-lg transition-all ${activeTab === tab.id ? "bg-white text-[#1A2E26] border-b-2 border-[#FFD700] font-semibold" : "text-gray-500 hover:text-[#1A2E26]"}`}>
                   <tab.icon size={16} /> {tab.label}
@@ -804,6 +942,359 @@ const saveSiteContent = async (content: SiteContent) => {
                 </button>
               ))}
             </div>
+
+            {/* Custom Sections Tab */}
+{activeTab === "customsections" && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <h3 className="text-xl font-semibold flex items-center gap-2">
+        <Layout size={24} className="text-[#FF8C00]" /> Custom Sections ({siteContent.customSections?.length || 0})
+      </h3>
+      <button 
+        onClick={() => setShowSectionBuilder(true)} 
+        className="px-4 py-2 bg-[#1A2E26] text-white rounded-lg flex items-center gap-2"
+      >
+        <Plus size={16} /> Create New Section
+      </button>
+    </div>
+
+    {siteContent.customSections?.length === 0 && (
+      <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+        <div className="text-6xl mb-4">🎨</div>
+        <h3 className="text-xl font-semibold mb-2">No Custom Sections Yet</h3>
+        <p className="text-gray-500 mb-4">Create your own custom sections with any layout you want!</p>
+        <button onClick={() => setShowSectionBuilder(true)} className="px-6 py-2 bg-[#1A2E26] text-white rounded-lg">
+          Create Your First Section
+        </button>
+      </div>
+    )}
+
+    {siteContent.customSections?.map((section, idx) => (
+      <div key={section.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="p-6 border-b flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold">{section.title || "Untitled Section"}</h3>
+            <p className="text-sm text-gray-500">Layout: {section.layout} | {section.items.length} items</p>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => updateCustomSection(idx, "enabled", !section.enabled)} 
+              className={`px-3 py-1 rounded-lg text-sm ${section.enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+            >
+              {section.enabled ? "Visible" : "Hidden"}
+            </button>
+            <button 
+              onClick={() => deleteCustomSection(idx)} 
+              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <input 
+              type="text" 
+              placeholder="Section Title" 
+              value={section.title} 
+              onChange={(e) => updateCustomSection(idx, "title", e.target.value)} 
+              className="w-full px-3 py-2 border rounded-lg" 
+            />
+            <input 
+              type="text" 
+              placeholder="Subtitle" 
+              value={section.subtitle} 
+              onChange={(e) => updateCustomSection(idx, "subtitle", e.target.value)} 
+              className="w-full px-3 py-2 border rounded-lg" 
+            />
+          </div>
+          <textarea 
+            placeholder="Description" 
+            value={section.description} 
+            onChange={(e) => updateCustomSection(idx, "description", e.target.value)} 
+            rows={2} 
+            className="w-full px-3 py-2 border rounded-lg" 
+          />
+          <div className="grid md:grid-cols-3 gap-4">
+            <select 
+              value={section.layout} 
+              onChange={(e) => updateCustomSection(idx, "layout", e.target.value)} 
+              className="px-3 py-2 border rounded-lg"
+            >
+              <option value="grid">Grid (3 columns)</option>
+              <option value="list">List (1 column)</option>
+            </select>
+            <input 
+              type="color" 
+              value={section.backgroundColor} 
+              onChange={(e) => updateCustomSection(idx, "backgroundColor", e.target.value)} 
+              className="h-10 rounded border" 
+            />
+            <input 
+              type="color" 
+              value={section.textColor} 
+              onChange={(e) => updateCustomSection(idx, "textColor", e.target.value)} 
+              className="h-10 rounded border" 
+            />
+          </div>
+          
+          <div className="border-t pt-4">
+            <h4 className="font-medium mb-3">Items ({section.items.length})</h4>
+            {section.items.map((item, itemIdx) => (
+              <div key={itemIdx} className="p-4 bg-gray-50 rounded-lg mb-3">
+                <div className="grid md:grid-cols-3 gap-3 mb-2">
+                  <input 
+                    type="text" 
+                    placeholder="Icon (emoji)" 
+                    value={item.icon} 
+                    onChange={(e) => updateSectionItem(idx, itemIdx, "icon", e.target.value)} 
+                    className="px-3 py-2 border rounded-lg" 
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Title" 
+                    value={item.title} 
+                    onChange={(e) => updateSectionItem(idx, itemIdx, "title", e.target.value)} 
+                    className="px-3 py-2 border rounded-lg" 
+                  />
+                  <button 
+                    onClick={() => deleteSectionItem(idx, itemIdx)} 
+                    className="px-3 py-2 bg-red-100 text-red-700 rounded-lg"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea 
+                  placeholder="Description" 
+                  value={item.description} 
+                  onChange={(e) => updateSectionItem(idx, itemIdx, "description", e.target.value)} 
+                  rows={2} 
+                  className="w-full px-3 py-2 border rounded-lg" 
+                />
+              </div>
+            ))}
+            <button 
+              onClick={() => addSectionItem(idx)} 
+              className="mt-2 w-full px-4 py-2 border border-dashed rounded-lg text-gray-500 hover:border-[#FFD700] hover:text-[#FFD700] flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> Add Item
+            </button>
+          </div>
+        </div>
+      </div>
+    ))}
+
+    {/* Calendar Bookings Tab */}
+{activeTab === "calendar-bookings" && (
+  <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+    <div className="p-6 border-b">
+      <h3 className="text-lg font-semibold text-[#1A2E26]">Calendar Bookings ({calendarBookings.length})</h3>
+      <p className="text-sm text-gray-500 mt-1">Manage farmhouse time slot bookings</p>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[800px]">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Time</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Booked On</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {calendarBookings.map((booking) => (
+            <tr key={booking.id} className="hover:bg-gray-50">
+              <td className="px-6 py-4">
+                <div className="font-medium text-gray-900">{booking.name}</div>
+                <div className="text-xs text-gray-500">{booking.email}</div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="font-medium">{booking.booking_date}</div>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  booking.time_slot === "morning" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"
+                }`}>
+                  {booking.time_slot === "morning" ? "☀️ Morning (10 AM - 10 PM)" : "🌙 Night (10 PM - 10 AM)"}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <span className="font-medium">{booking.hours} hours</span>
+                <div className="text-xs text-gray-500">
+                  {booking.hours === 24 ? "Full Day" : `${booking.hours} Hour Booking`}
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="text-sm">{booking.phone}</div>
+                <a href={`mailto:${booking.email}`} className="text-xs text-[#FF8C00] hover:underline">
+                  Send Email
+                </a>
+              </td>
+              <td className="px-6 py-4">
+                <select
+                  value={booking.status}
+                  onChange={(e) => updateCalendarBookingStatus(booking.id, e.target.value)}
+                  className={`text-xs px-2 py-1 rounded-full font-semibold border-none ${
+                    booking.status === "confirmed" ? "bg-green-100 text-green-700" :
+                    booking.status === "pending" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </td>
+              <td className="px-6 py-4 text-sm text-gray-500">
+                {new Date(booking.created_at).toLocaleDateString()}
+              </td>
+              <td className="px-6 py-4">
+                <div className="flex gap-2">
+                  <a
+                    href={`https://wa.me/${booking.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(booking.name)}%2C%20your%20booking%20for%20${booking.booking_date}%20has%20been%20${booking.status}.%20Thank%20you!`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 text-green-500 hover:text-green-700"
+                  >
+                    <MessageCircle size={16} />
+                  </a>
+                  <button onClick={() => deleteCalendarBooking(booking.id)} className="p-1 text-red-500 hover:text-red-700">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {calendarBookings.length === 0 && (
+            <tr>
+              <td colSpan={7} className="text-center py-12 text-gray-500">
+                No calendar bookings yet. Bookings from the availability calendar will appear here.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+    {/* Section Builder Modal */}
+    {showSectionBuilder && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Create New Section</h3>
+            <button onClick={() => setShowSectionBuilder(false)}><X size={20} /></button>
+          </div>
+          <div className="space-y-4">
+            <input 
+              type="text" 
+              placeholder="Section Title" 
+              value={newSection.title} 
+              onChange={(e) => setNewSection({...newSection, title: e.target.value})} 
+              className="w-full px-3 py-2 border rounded-lg" 
+            />
+            <input 
+              type="text" 
+              placeholder="Subtitle" 
+              value={newSection.subtitle} 
+              onChange={(e) => setNewSection({...newSection, subtitle: e.target.value})} 
+              className="w-full px-3 py-2 border rounded-lg" 
+            />
+            <textarea 
+              placeholder="Description" 
+              value={newSection.description} 
+              onChange={(e) => setNewSection({...newSection, description: e.target.value})} 
+              rows={2} 
+              className="w-full px-3 py-2 border rounded-lg" 
+            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <select 
+                value={newSection.layout} 
+                onChange={(e) => setNewSection({...newSection, layout: e.target.value})} 
+                className="px-3 py-2 border rounded-lg"
+              >
+                <option value="grid">Grid (3 columns)</option>
+                <option value="list">List (1 column)</option>
+              </select>
+              <input 
+                type="color" 
+                value={newSection.backgroundColor} 
+                onChange={(e) => setNewSection({...newSection, backgroundColor: e.target.value})} 
+                className="h-10 rounded border" 
+              />
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Items</h4>
+              {newSection.items.map((item, idx) => (
+                <div key={idx} className="p-4 bg-gray-50 rounded-lg mb-3">
+                  <div className="grid md:grid-cols-2 gap-3 mb-2">
+                    <input 
+                      type="text" 
+                      placeholder="Icon (emoji)" 
+                      value={item.icon} 
+                      onChange={(e) => {
+                        const items = [...newSection.items];
+                        items[idx].icon = e.target.value;
+                        setNewSection({...newSection, items});
+                      }} 
+                      className="px-3 py-2 border rounded-lg" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Title" 
+                      value={item.title} 
+                      onChange={(e) => {
+                        const items = [...newSection.items];
+                        items[idx].title = e.target.value;
+                        setNewSection({...newSection, items});
+                      }} 
+                      className="px-3 py-2 border rounded-lg" 
+                    />
+                  </div>
+                  <textarea 
+                    placeholder="Description" 
+                    value={item.description} 
+                    onChange={(e) => {
+                      const items = [...newSection.items];
+                      items[idx].description = e.target.value;
+                      setNewSection({...newSection, items});
+                    }} 
+                    rows={2} 
+                    className="w-full px-3 py-2 border rounded-lg" 
+                  />
+                  <button 
+                    onClick={() => {
+                      const items = newSection.items.filter((_, i) => i !== idx);
+                      setNewSection({...newSection, items});
+                    }} 
+                    className="mt-2 text-red-500 text-sm"
+                  >
+                    Remove Item
+                  </button>
+                </div>
+              ))}
+              <button 
+                onClick={() => setNewSection({...newSection, items: [...newSection.items, { title: "", description: "", icon: "⭐" }]})} 
+                className="w-full px-4 py-2 border border-dashed rounded-lg text-gray-500 hover:border-[#FFD700] flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> Add Item
+              </button>
+            </div>
+            
+            <button 
+              onClick={addCustomSection} 
+              className="w-full py-2 bg-[#1A2E26] text-white rounded-lg mt-4"
+            >
+              Create Section
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
             {/* Dashboard Tab */}
             {activeTab === "dashboard" && (

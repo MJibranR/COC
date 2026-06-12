@@ -21,8 +21,20 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, phone, villa_id, check_in, check_out, guests, amount } = await request.json();
+    const { name, email, phone, villa_id, check_in, check_out, guests, amount, timeSlot, hours, date, status } = await request.json();
     
+    // For calendar booking (date, timeSlot, hours)
+    if (date && timeSlot && hours) {
+      const result = await query(
+        `INSERT INTO calendar_bookings (name, email, phone, booking_date, time_slot, hours, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         RETURNING *`,
+        [name, email, phone, date, timeSlot, hours, status || 'pending']
+      );
+      return NextResponse.json(result.rows[0], { status: 201 });
+    }
+    
+    // For regular villa booking
     const result = await query(
       `INSERT INTO bookings (name, email, phone, villa_id, check_in, check_out, guests, amount, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
@@ -38,7 +50,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
 export async function PUT(request: NextRequest) {
   try {
     const { id, status } = await request.json();
