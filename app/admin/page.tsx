@@ -51,6 +51,28 @@ import {
 import Link from "next/link";
 
 // Types
+interface PricingOption {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+  price: number;
+  isTrending: boolean;
+  enabled: boolean;
+  icon?: string;
+}
+
+interface PricingData {
+  id: number;
+  title: string;
+  description: string;
+  facilities: string[];
+  contactNumber: string;
+  website: string;
+  enabled: boolean;
+  pricingOptions: PricingOption[];
+}
+
 interface CalendarBooking {
   id: number;
   name: string;
@@ -217,8 +239,51 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [villas, setVillas] = useState<Villa[]>([]);
+  const [pricingData, setPricingData] = useState<PricingData>({
+  id: 1,
+  title: "Colors of Combine Farm House",
+  description: "Secure your booking before the slots are gone!",
+  facilities: [
+    "3 Bedrooms (without AC)",
+    "Kitchen",
+    "Kidz Play Area & Birds Area",
+    "Table Tennis",
+    "Foosball, Carrom, Pool ball",
+    "BBQ Pit (Angeethi + 1 Dozen Seekh)",
+    "Spacious Parking Area",
+    "K-Electric + Solar + Generator Backup",
+    "2 Swimming Pools (Adults & Kids)",
+    "Poolside Shower Area + 4 Changing Rooms",
+    "6 Public Washrooms (Ladies & Gents)"
+  ],
+  contactNumber: "03193372277",
+  website: "www.combinegrp.com",
+  enabled: true,
+  pricingOptions: [
+    { id: "weekday-night", name: "weekday-night", label: "Weekday Night", description: "Monday - Thursday", price: 45000, isTrending: false, enabled: true, icon: "🌙" },
+    { id: "weekend-night", name: "weekend-night", label: "Weekend Night", description: "Friday - Sunday", price: 55000, isTrending: true, enabled: true, icon: "⭐" },
+    { id: "22-hours", name: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, isTrending: false, enabled: true, icon: "⏰" },
+    { id: "weekday-morning", name: "weekday-morning", label: "Weekday Morning", description: "Monday - Thursday (8 AM - 6 PM)", price: 35000, isTrending: false, enabled: false, icon: "☀️" },
+    { id: "weekend-morning", name: "weekend-morning", label: "Weekend Morning", description: "Friday - Sunday (8 AM - 6 PM)", price: 45000, isTrending: false, enabled: false, icon: "🌅" }
+  ]
+});
+const [newPricingOption, setNewPricingOption] = useState<Partial<PricingOption>>({ 
+  label: "", 
+  description: "", 
+  price: 0, 
+  icon: "🏷️" 
+});
+const [showAddPricingOption, setShowAddPricingOption] = useState(false);
+const [newFacility, setNewFacility] = useState("");
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [calendarBookings, setCalendarBookings] = useState<CalendarBooking[]>([]);
+  const [blockedDates, setBlockedDates] = useState<any[]>([]);
+  const [showBlockDateModal, setShowBlockDateModal] = useState(false);
+  const [newBlockedDate, setNewBlockedDate] = useState({
+    booking_date: "",
+    time_slot: "morning",
+    reason: ""
+  });
   const [showSectionBuilder, setShowSectionBuilder] = useState(false);
   const [newSection, setNewSection] = useState({
     id: Date.now().toString(),
@@ -365,15 +430,17 @@ export default function AdminPage() {
   const [newJournalPost, setNewJournalPost] = useState({ title: "", date: "", image: "", description: "" });
   const [newExperienceItem, setNewExperienceItem] = useState({ title: "", description: "", color: "from-cyan-400 to-blue-500" });
 
-  useEffect(() => {
-    const token = localStorage.getItem("adminAuth");
-    if (token === "true") {
-      setIsAuthenticated(true);
-      fetchData();
-      loadSiteContent();
-      fetchCalendarBookings();
-    }
-  }, []);
+useEffect(() => {
+  const token = localStorage.getItem("adminAuth");
+  if (token === "true") {
+    setIsAuthenticated(true);
+    fetchData();
+    loadSiteContent();
+    fetchCalendarBookings();
+    fetchPricingData();
+    fetchBlockedDates();
+  }
+}, []);
 
   const showToast = (message: string, type: string = "success") => {
     setToast({ message, type });
@@ -443,6 +510,49 @@ export default function AdminPage() {
       }
     }
   };
+
+  const fetchBlockedDates = async () => {
+    try {
+      const res = await fetch("/api/blocked-dates");
+      const data = await res.json();
+      setBlockedDates(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching blocked dates:", error);
+    }
+  };
+
+  const addBlockedDate = async () => {
+  if (!newBlockedDate.booking_date) {
+    showToast("Please select a date", "error");
+    return;
+  }
+  
+  try {
+    await fetch("/api/blocked-dates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newBlockedDate)
+    });
+    fetchBlockedDates();
+    setShowBlockDateModal(false);
+    setNewBlockedDate({ booking_date: "", time_slot: "morning", reason: "" });
+    showToast("Date blocked successfully!");
+  } catch (error) {
+    showToast("Failed to block date", "error");
+  }
+};
+
+const unblockDate = async (id: number) => {
+  if (confirm("Unblock this date?")) {
+    try {
+      await fetch(`/api/blocked-dates?id=${id}`, { method: "DELETE" });
+      fetchBlockedDates();
+      showToast("Date unblocked successfully!");
+    } catch (error) {
+      showToast("Failed to unblock date", "error");
+    }
+  }
+};
 
   const loadSiteContent = async () => {
     try {
@@ -768,6 +878,104 @@ export default function AdminPage() {
     showToast("Message marked as read");
   };
 
+  const fetchPricingData = async () => {
+  try {
+    const res = await fetch("/api/pricing");
+    const data = await res.json();
+    if (data && Object.keys(data).length > 0) {
+      setPricingData({
+        ...data,
+        pricingOptions: data.pricingOptions || [
+          { id: "weekday-night", name: "weekday-night", label: "Weekday Night", description: "Monday - Thursday", price: 45000, isTrending: false, enabled: true, icon: "🌙" },
+          { id: "weekend-night", name: "weekend-night", label: "Weekend Night", description: "Friday - Sunday", price: 55000, isTrending: true, enabled: true, icon: "⭐" },
+          { id: "22-hours", name: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, isTrending: false, enabled: true, icon: "⏰" }
+        ]
+      });
+    }
+  } catch (error) {
+    console.error("Error fetching pricing:", error);
+  }
+};
+
+const savePricingData = async () => {
+  try {
+    await fetch("/api/pricing", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: pricingData.title,
+        description: pricingData.description,
+        facilities: pricingData.facilities,
+        contactNumber: pricingData.contactNumber,
+        website: pricingData.website,
+        enabled: pricingData.enabled,
+        pricingOptions: pricingData.pricingOptions
+      })
+    });
+    showToast("Pricing updated successfully!");
+  } catch (error) {
+    showToast("Failed to update pricing", "error");
+  }
+};
+
+const updatePricingOption = (id: string, field: string, value: any) => {
+  setPricingData(prev => ({
+    ...prev,
+    pricingOptions: prev.pricingOptions.map(opt => 
+      opt.id === id ? { ...opt, [field]: value } : opt
+    )
+  }));
+};
+
+const addPricingOption = () => {
+  if (newPricingOption.label && newPricingOption.price) {
+    const newOption: PricingOption = {
+      id: newPricingOption.label.toLowerCase().replace(/\s+/g, '-'),
+      name: newPricingOption.label.toLowerCase().replace(/\s+/g, '-'),
+      label: newPricingOption.label,
+      description: newPricingOption.description || "",
+      price: newPricingOption.price,
+      isTrending: false,
+      enabled: true,
+      icon: newPricingOption.icon || "🏷️"
+    };
+    setPricingData(prev => ({
+      ...prev,
+      pricingOptions: [...prev.pricingOptions, newOption]
+    }));
+    setNewPricingOption({ label: "", description: "", price: 0, icon: "🏷️" });
+    setShowAddPricingOption(false);
+    showToast("Pricing option added! Click Save to persist.");
+  }
+};
+
+const deletePricingOption = (id: string) => {
+  if (confirm("Delete this pricing option?")) {
+    setPricingData(prev => ({
+      ...prev,
+      pricingOptions: prev.pricingOptions.filter(opt => opt.id !== id)
+    }));
+    showToast("Pricing option removed. Click Save to persist.");
+  }
+};
+
+const addFacility = () => {
+  if (newFacility.trim()) {
+    setPricingData(prev => ({
+      ...prev,
+      facilities: [...prev.facilities, newFacility.trim()]
+    }));
+    setNewFacility("");
+  }
+};
+
+const removeFacility = (index: number) => {
+  setPricingData(prev => ({
+    ...prev,
+    facilities: prev.facilities.filter((_, i) => i !== index)
+  }));
+};
+
   // Villa Functions
   const saveVilla = async (villaData: Partial<Villa>) => {
     try {
@@ -842,7 +1050,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED]">
+    <div className="min-h-screen text-black bg-[#F5F2ED]">
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -50 }} className={`fixed top-20 right-6 z-50 px-6 py-3 rounded-lg shadow-lg ${toast.type === "error" ? "bg-red-500" : "bg-green-500"} text-white`}>{toast.message}</motion.div>}</AnimatePresence>
       
       <nav className="bg-[#1A2E26] text-white sticky top-0 z-50 shadow-lg">
@@ -899,7 +1107,9 @@ export default function AdminPage() {
                 { id: "wellness", icon: Heart, label: "Wellness" },
                 { id: "gallery", icon: ImageIcon, label: "Gallery" },
                 { id: "journal", icon: FileText, label: "Journal" },
+                { id: "pricing", icon: DollarSign, label: "Pricing" },
                 { id: "calendar-bookings", icon: Calendar, label: "Calendar Bookings", count: calendarBookings.length },
+                { id: "blocked-dates", icon: Calendar, label: "Blocked Dates", count: blockedDates.length },
                 { id: "contact", icon: Mail, label: "Contact" },
                 { id: "footer", icon: Layout, label: "Footer" },
                 { id: "colors", icon: Palette, label: "Colors & Styling" },
@@ -986,6 +1196,299 @@ export default function AdminPage() {
               <div className="bg-white rounded-xl shadow-lg p-6"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-semibold">Edit Journal</h3><button onClick={() => toggleSection("journal", !siteContent.journal.enabled)} className="px-3 py-1 rounded-lg text-sm bg-red-100">{siteContent.journal.enabled ? "Hide" : "Show"}</button></div>{siteContent.journal.posts.map((post, idx) => (<div key={idx} className="p-4 bg-gray-50 rounded-lg mb-3"><input type="text" value={post.title} onChange={(e) => { const posts = [...siteContent.journal.posts]; posts[idx].title = e.target.value; updateJournalPosts(posts); }} placeholder="Title" className="w-full mb-2 px-3 py-2 border rounded-lg" /><input type="text" value={post.image} onChange={(e) => { const posts = [...siteContent.journal.posts]; posts[idx].image = e.target.value; updateJournalPosts(posts); }} placeholder="Image URL" className="w-full mb-2 px-3 py-2 border rounded-lg" /><textarea value={post.description} onChange={(e) => { const posts = [...siteContent.journal.posts]; posts[idx].description = e.target.value; updateJournalPosts(posts); }} rows={2} className="w-full px-3 py-2 border rounded-lg" /><button onClick={() => deleteJournalPost(idx)} className="mt-2 text-red-500 text-sm">Delete</button></div>))}<div className="border-t pt-4"><div className="flex gap-3"><input type="text" placeholder="Title" value={newJournalPost.title} onChange={(e) => setNewJournalPost({...newJournalPost, title: e.target.value})} className="flex-1 px-3 py-2 border rounded-lg" /><input type="text" placeholder="Image URL" value={newJournalPost.image} onChange={(e) => setNewJournalPost({...newJournalPost, image: e.target.value})} className="flex-1 px-3 py-2 border rounded-lg" /></div><textarea placeholder="Description" value={newJournalPost.description} onChange={(e) => setNewJournalPost({...newJournalPost, description: e.target.value})} rows={2} className="w-full mt-2 px-3 py-2 border rounded-lg" /><button onClick={addJournalPost} className="mt-2 px-4 py-2 bg-[#1A2E26] text-white rounded-lg"><Plus size={16} /> Add</button></div></div>
             )}
 
+            {/* Pricing Tab - Complete Management */}
+{activeTab === "pricing" && (
+  <div className="space-y-6">
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold flex items-center gap-2">
+          <DollarSign size={24} className="text-[#FF8C00]" /> Pricing Management
+        </h3>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={pricingData.enabled}
+              onChange={(e) => setPricingData({ ...pricingData, enabled: e.target.checked })}
+              className="w-4 h-4 text-[#FF8C00]"
+            />
+            <span className="text-sm">Show Pricing Section</span>
+          </label>
+          <button
+            onClick={savePricingData}
+            className="px-4 py-2 bg-[#1A2E26] text-white rounded-lg hover:bg-[#2D4A3E] flex items-center gap-2"
+          >
+            <Save size={16} /> Save All Changes
+          </button>
+        </div>
+      </div>
+
+      {/* Main Settings */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Section Title</label>
+          <input
+            type="text"
+            value={pricingData.title}
+            onChange={(e) => setPricingData({ ...pricingData, title: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <input
+            type="text"
+            value={pricingData.description}
+            onChange={(e) => setPricingData({ ...pricingData, description: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+        </div>
+      </div>
+
+      {/* Pricing Options Section */}
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="text-lg font-semibold text-[#1A2E26]">Pricing Options</h4>
+          <button
+            onClick={() => setShowAddPricingOption(true)}
+            className="px-3 py-1 bg-[#1A2E26] text-white rounded-lg text-sm flex items-center gap-1"
+          >
+            <Plus size={14} /> Add Option
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Icon</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price (PKR)</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trending</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pricingData.pricingOptions.map((option) => (
+                <tr key={option.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={option.icon}
+                      onChange={(e) => updatePricingOption(option.id, "icon", e.target.value)}
+                      className="w-12 text-center text-xl border rounded-lg px-2 py-1"
+                      maxLength={2}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={option.label}
+                      onChange={(e) => updatePricingOption(option.id, "label", e.target.value)}
+                      className="w-32 px-2 py-1 border rounded-lg"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={option.description}
+                      onChange={(e) => updatePricingOption(option.id, "description", e.target.value)}
+                      className="w-40 px-2 py-1 border rounded-lg"
+                      placeholder="e.g., Monday - Thursday"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      value={option.price}
+                      onChange={(e) => updatePricingOption(option.id, "price", parseInt(e.target.value))}
+                      className="w-28 px-2 py-1 border rounded-lg"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => {
+                        // Set only one trending option
+                        setPricingData(prev => ({
+                          ...prev,
+                          pricingOptions: prev.pricingOptions.map(opt => ({
+                            ...opt,
+                            isTrending: opt.id === option.id
+                          }))
+                        }));
+                      }}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        option.isTrending 
+                          ? 'bg-[#FFD700] text-[#1A2E26] shadow-md' 
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {option.isTrending ? '★ Trending' : 'Set Trending'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => updatePricingOption(option.id, "enabled", !option.enabled)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        option.enabled 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {option.enabled ? 'Active' : 'Inactive'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => deletePricingOption(option.id)}
+                      className="p-1 text-red-500 hover:text-red-700"
+                      disabled={pricingData.pricingOptions.length <= 1}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Facilities Management */}
+      <div className="mb-6">
+        <h4 className="text-lg font-semibold text-[#1A2E26] mb-4">Facilities</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+          {pricingData.facilities.map((facility, idx) => (
+            <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+              <span className="text-sm">{facility}</span>
+              <button onClick={() => removeFacility(idx)} className="p-1 text-red-500 hover:text-red-700">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newFacility}
+            onChange={(e) => setNewFacility(e.target.value)}
+            placeholder="New facility (e.g., Swimming Pool)"
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+            onKeyPress={(e) => e.key === 'Enter' && addFacility()}
+          />
+          <button onClick={addFacility} className="px-4 py-2 bg-[#1A2E26] text-white rounded-lg hover:bg-[#2D4A3E]">
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Contact Information */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp/Phone Number</label>
+          <input
+            type="text"
+            value={pricingData.contactNumber || ""}
+            onChange={(e) => setPricingData({ ...pricingData, contactNumber: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+          <input
+            type="text"
+            value={pricingData.website || ""}
+            onChange={(e) => setPricingData({ ...pricingData, website: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+        </div>
+      </div>
+
+      {/* Live Preview */}
+      <div className="border-t pt-4 mt-4">
+        <h4 className="font-medium text-gray-700 mb-3">Live Preview</h4>
+        <div className="bg-gradient-to-r from-[#FFD700] to-[#FF8C00] rounded-lg p-4">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {pricingData.pricingOptions.filter(opt => opt.enabled).slice(0, 3).map(opt => (
+              <div key={opt.id} className="bg-white/20 rounded-lg p-2">
+                <div className="text-2xl">{opt.icon}</div>
+                <div className="font-bold text-white text-sm">{opt.label}</div>
+                <div className="text-xs text-white/80">₨ {opt.price.toLocaleString()}</div>
+                {opt.isTrending && <div className="text-[10px] text-[#FFD700] mt-1">🔥 Trending</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Add Pricing Option Modal */}
+    {showAddPricingOption && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Add Pricing Option</h3>
+            <button onClick={() => setShowAddPricingOption(false)}><X size={20} /></button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Icon (emoji)</label>
+              <input
+                type="text"
+                value={newPricingOption.icon}
+                onChange={(e) => setNewPricingOption({ ...newPricingOption, icon: e.target.value })}
+                placeholder="e.g., 🌙, ⭐, ☀️"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+                maxLength={2}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+              <input
+                type="text"
+                value={newPricingOption.label}
+                onChange={(e) => setNewPricingOption({ ...newPricingOption, label: e.target.value })}
+                placeholder="e.g., Weekday Night"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <input
+                type="text"
+                value={newPricingOption.description}
+                onChange={(e) => setNewPricingOption({ ...newPricingOption, description: e.target.value })}
+                placeholder="e.g., Monday - Thursday"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Price (PKR)</label>
+              <input
+                type="number"
+                value={newPricingOption.price || 0}
+                onChange={(e) => setNewPricingOption({ ...newPricingOption, price: parseInt(e.target.value) || 0 })}
+                placeholder="e.g., 45000"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+                required
+              />
+            </div>
+            <button
+              onClick={addPricingOption}
+              className="w-full py-2 bg-[#1A2E26] text-white rounded-lg hover:bg-[#2D4A3E]"
+            >
+              Add Option
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
             {/* Calendar Bookings Tab */}
             {activeTab === "calendar-bookings" && (
               <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -1010,7 +1513,7 @@ export default function AdminPage() {
                       {calendarBookings.map((booking) => (
                         <tr key={booking.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4"><div className="font-medium">{booking.name}</div><div className="text-xs text-gray-500">{booking.email}</div></td>
-                          <td className="px-6 py-4"><div className="font-medium">{booking.booking_date}</div><span className={`text-xs px-2 py-0.5 rounded-full ${booking.time_slot === "morning" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"}`}>{booking.time_slot === "morning" ? "☀️ Morning (10 AM - 10 PM)" : "🌙 Night (10 PM - 10 AM)"}</span></td>
+                          <td className="px-6 py-4"><div className="font-medium">{booking.booking_date}</div><span className={`text-xs px-2 py-0.5 rounded-full ${booking.time_slot === "morning" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"}`}>{booking.time_slot === "morning" ? "☀️ Morning (8 AM - 6 PM)" : "🌙 Night (8 PM - 6 AM)"}</span></td>
                           <td className="px-6 py-4"><span className="font-medium">{booking.hours} hours</span><div className="text-xs text-gray-500">{booking.hours === 24 ? "Full Day" : `${booking.hours} Hour Booking`}</div></td>
                           <td className="px-6 py-4"><div className="text-sm">{booking.phone}</div><a href={`mailto:${booking.email}`} className="text-xs text-[#FF8C00] hover:underline">Send Email</a></td>
                           <td className="px-6 py-4"><select value={booking.status} onChange={(e) => updateCalendarBookingStatus(booking.id, e.target.value)} className={`text-xs px-2 py-1 rounded-full font-semibold border-none ${booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "pending" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="cancelled">Cancelled</option></select></td>
@@ -1044,6 +1547,123 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Blocked Dates Tab */}
+{activeTab === "blocked-dates" && (
+  <div className="space-y-6">
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold flex items-center gap-2">
+          <Calendar size={24} className="text-[#FF8C00]" /> Blocked Dates Management
+        </h3>
+        <button
+          onClick={() => setShowBlockDateModal(true)}
+          className="px-4 py-2 bg-[#1A2E26] text-white rounded-lg flex items-center gap-2 hover:bg-[#2D4A3E]"
+        >
+          <Plus size={16} /> Block Date
+        </button>
+      </div>
+
+      <p className="text-gray-600 mb-6">
+        Block specific dates and time slots to prevent bookings. Useful for maintenance, private events, or holidays.
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time Slot</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blocked On</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {blockedDates.map((date) => (
+              <tr key={date.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 font-medium">{new Date(date.booking_date).toLocaleDateString()}</td>
+                <td className="px-6 py-4">
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    date.time_slot === "morning" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"
+                  }`}>
+                    {date.time_slot === "morning" ? "☀️ Morning (8 AM - 6 PM)" : "🌙 Night (8 PM - 6 AM)"}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-gray-600">{date.reason || "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{new Date(date.created_at).toLocaleDateString()}</td>
+                <td className="px-6 py-4">
+                  <button onClick={() => unblockDate(date.id)} className="text-green-500 hover:text-green-700">
+                    <CheckCircle size={18} /> Unblock
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {blockedDates.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center py-12 text-gray-500">
+                  No blocked dates. All dates are available for booking.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* Block Date Modal */}
+    {showBlockDateModal && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Block Date & Time Slot</h3>
+            <button onClick={() => setShowBlockDateModal(false)}><X size={20} /></button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Date</label>
+              <input
+                type="date"
+                value={newBlockedDate.booking_date}
+                onChange={(e) => setNewBlockedDate({ ...newBlockedDate, booking_date: e.target.value })}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+              <select
+                value={newBlockedDate.time_slot}
+                onChange={(e) => setNewBlockedDate({ ...newBlockedDate, time_slot: e.target.value as "morning" | "night" })}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+              >
+                <option value="morning">Morning (8 AM - 6 PM)</option>
+                <option value="night">Night (8 PM - 6 AM)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason (Optional)</label>
+              <textarea
+                value={newBlockedDate.reason}
+                onChange={(e) => setNewBlockedDate({ ...newBlockedDate, reason: e.target.value })}
+                placeholder="e.g., Maintenance, Private Event, Holiday"
+                rows={2}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+              />
+            </div>
+            <button
+              onClick={addBlockedDate}
+              className="w-full py-2 bg-[#1A2E26] text-white rounded-lg hover:bg-[#2D4A3E]"
+            >
+              Block Date
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
             {/* Contact Tab */}
             {activeTab === "contact" && (

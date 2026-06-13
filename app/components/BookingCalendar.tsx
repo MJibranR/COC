@@ -2,163 +2,172 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar as CalendarIcon, Clock, User, Phone, Mail, MessageCircle, X, Check, AlertCircle, ChevronDown } from "lucide-react";
+import { X, Check, ChevronLeft, ChevronRight, Sun, Moon, Phone, MessageCircle } from "lucide-react";
 
-interface BookingSlot {
-  date: string;
-  timeSlot: "morning" | "night";
-  available: boolean;
-  bookedBy?: string;
-}
-
-interface Booking {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  date: string;
-  timeSlot: "morning" | "night";
-  hours: number;
-  status: "pending" | "confirmed" | "cancelled";
+interface PricingOption {
+  id: string;
+  label: string;
+  description: string;
+  price: number;
+  enabled: boolean;
+  icon: string;
 }
 
 export default function BookingCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState<"morning" | "night">("morning");
   const [hours, setHours] = useState(10);
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [bookingData, setBookingData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  });
-  const [availability, setAvailability] = useState<BookingSlot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [bookingData, setBookingData] = useState({ name: "", email: "", phone: "" });
+  const [blockedDates, setBlockedDates] = useState<any[]>([]);
+  const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
+  const [contactNumber, setContactNumber] = useState("03193372277");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
-  // Mock bookings data - In production, fetch from API
-  const [bookings, setBookings] = useState<Booking[]>([
-    { id: 1, name: "John Doe", email: "john@email.com", phone: "+1234567890", date: "2024-12-25", timeSlot: "morning", hours: 10, status: "confirmed" },
-    { id: 2, name: "Jane Smith", email: "jane@email.com", phone: "+1234567890", date: "2024-12-31", timeSlot: "night", hours: 22, status: "confirmed" },
-  ]);
+  const [calendarLoading, setCalendarLoading] = useState(true);
 
   useEffect(() => {
-    generateAvailability();
-  }, [currentDate]);
+    fetchBlockedDates();
+    fetchPricing();
+  }, []);
 
-  const generateAvailability = () => {
-    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    const slots: BookingSlot[] = [];
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      
-      // Check if date is already booked
-      const morningBooked = bookings.some(b => b.date === date && b.timeSlot === "morning" && b.status === "confirmed");
-      const nightBooked = bookings.some(b => b.date === date && b.timeSlot === "night" && b.status === "confirmed");
-      
-      slots.push({
-        date,
-        timeSlot: "morning",
-        available: !morningBooked && new Date(date) >= new Date(),
-      });
-      slots.push({
-        date,
-        timeSlot: "night",
-        available: !nightBooked && new Date(date) >= new Date(),
-      });
+  const fetchBlockedDates = async () => {
+    try {
+      const res = await fetch("/api/blocked-dates");
+      const data = await res.json();
+      setBlockedDates(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching blocked dates:", error);
     }
-    
-    setAvailability(slots);
   };
 
-  const checkAvailability = () => {
-    if (!selectedDate) {
-      setMessage("Please select a date first");
-      setTimeout(() => setMessage(""), 3000);
-      return;
+  const fetchPricing = async () => {
+    try {
+      const res = await fetch("/api/pricing");
+      const data = await res.json();
+      console.log("Pricing data:", data);
+      
+      if (data) {
+        setContactNumber(data.contactNumber || data.contact_number || "03193372277");
+        
+        if (data.pricingOptions && data.pricingOptions.length > 0) {
+          setPricingOptions(data.pricingOptions);
+        } else {
+          // Fallback pricing options
+          setPricingOptions([
+            { id: "weekday-morning", label: "Weekday Morning", description: "Monday - Thursday", price: 25000, enabled: true, icon: "☀️" },
+            { id: "weekend-morning", label: "Weekend Morning", description: "Friday - Sunday", price: 35000, enabled: true, icon: "☀️" },
+            { id: "weekday-night", label: "Weekday Night", description: "Monday - Thursday", price: 35000, enabled: true, icon: "🌙" },
+            { id: "weekend-night", label: "Weekend Night", description: "Friday - Sunday", price: 45000, enabled: true, icon: "⭐" },
+            { id: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, enabled: true, icon: "⏰" }
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching pricing:", error);
+      // Fallback pricing
+      setPricingOptions([
+        { id: "weekday-morning", label: "Weekday Morning", description: "Monday - Thursday", price: 25000, enabled: true, icon: "☀️" },
+        { id: "weekend-morning", label: "Weekend Morning", description: "Friday - Sunday", price: 35000, enabled: true, icon: "☀️" },
+        { id: "weekday-night", label: "Weekday Night", description: "Monday - Thursday", price: 35000, enabled: true, icon: "🌙" },
+        { id: "weekend-night", label: "Weekend Night", description: "Friday - Sunday", price: 45000, enabled: true, icon: "⭐" },
+        { id: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, enabled: true, icon: "⏰" }
+      ]);
+    } finally {
+      setCalendarLoading(false);
     }
-    
-    const morningSlot = availability.find(s => s.date === selectedDate && s.timeSlot === "morning");
-    const nightSlot = availability.find(s => s.date === selectedDate && s.timeSlot === "night");
-    
-    setSelectedSlot({
-      date: selectedDate,
-      timeSlot: selectedTime,
-      available: selectedTime === "morning" ? (morningSlot?.available || false) : (nightSlot?.available || false)
-    });
-    
-    setShowBookingModal(true);
   };
 
-const handleBooking = async () => {
-  if (!bookingData.name || !bookingData.email || !bookingData.phone) {
-    setMessage("Please fill all fields");
-    setTimeout(() => setMessage(""), 3000);
-    return;
-  }
-  
-  setLoading(true);
-  
-  // Check if still available via API
-  try {
-    const checkRes = await fetch("/api/calendar-bookings/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        booking_date: selectedDate,
-        time_slot: selectedTime
-      }),
+  const isSlotBlocked = (dateStr: string, timeSlot: string) => {
+    return blockedDates.some(b => {
+      const bDate = new Date(b.booking_date).toISOString().split('T')[0];
+      return bDate === dateStr && b.time_slot === timeSlot;
     });
+  };
+
+  const getDayType = (date: Date) => {
+    const day = date.getDay();
+    // 1-4 = Monday-Thursday (Weekday), 0,5,6 = Sunday, Friday, Saturday (Weekend)
+    return (day >= 1 && day <= 4) ? "weekday" : "weekend";
+  };
+
+  const getPriceForSlot = (date: Date, timeSlot: "morning" | "night", hoursCount: number) => {
+    const dayType = getDayType(date);
     
-    const checkData = await checkRes.json();
-    if (!checkData.available) {
-      setMessage("Sorry, this slot is no longer available!");
-      setTimeout(() => setMessage(""), 3000);
-      setLoading(false);
-      return;
+    // For 22 hours booking
+    if (hoursCount === 22) {
+      const option = pricingOptions.find(opt => opt.id === "22-hours" && opt.enabled);
+      return option?.price || 85000;
     }
     
-    // Save booking
-    await fetch("/api/calendar-bookings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: bookingData.name,
-        email: bookingData.email,
-        phone: bookingData.phone,
-        booking_date: selectedDate,
-        time_slot: selectedTime,
-        hours: hours,
-        status: "pending"
-      }),
-    });
+    // For morning/night bookings
+    const optionKey = `${dayType}-${timeSlot}`;
+    const option = pricingOptions.find(opt => opt.id === optionKey && opt.enabled);
     
-    // WhatsApp message
-    const timeText = selectedTime === "morning" ? "Morning (10 AM - 10 PM)" : "Night (10 PM - 10 AM)";
-    const messageText = `Hello! I would like to book the farmhouse.%0A%0A📅 Date: ${selectedDate}%0A⏰ Time: ${timeText}%0A🕐 Duration: ${hours} hours%0A👤 Name: ${bookingData.name}%0A📧 Email: ${bookingData.email}%0A📞 Phone: ${bookingData.phone}%0A%0APlease confirm my booking. Thank you!`;
+    let basePrice = 0;
+    if (option) {
+      basePrice = option.price;
+    } else {
+      // Fallback prices
+      if (dayType === "weekday") {
+        basePrice = timeSlot === "morning" ? 25000 : 35000;
+      } else {
+        basePrice = timeSlot === "morning" ? 35000 : 45000;
+      }
+    }
     
-    const whatsappUrl = `https://wa.me/923333333333?text=${messageText}`;
-    window.open(whatsappUrl, "_blank");
+    // Add extra hours cost if more than 10 hours
+    if (hoursCount > 10) {
+      const extraHours = hoursCount - 10;
+      const extraCost = extraHours * 2000;
+      return basePrice + extraCost;
+    }
     
-    setLoading(false);
-    setShowBookingModal(false);
-    setBookingData({ name: "", email: "", phone: "" });
-    setMessage("Booking request sent! Check your WhatsApp.");
-    setTimeout(() => setMessage(""), 3000);
+    return basePrice;
+  };
+
+  const getTimeSlotPrice = (date: Date, timeSlot: "morning" | "night") => {
+    const dayType = getDayType(date);
+    const optionKey = `${dayType}-${timeSlot}`;
+    const option = pricingOptions.find(opt => opt.id === optionKey && opt.enabled);
     
-    // Refresh availability
-    generateAvailability();
+    if (option) {
+      return option.price;
+    }
     
-  } catch (error) {
-    console.error("Error:", error);
-    setMessage("Booking failed. Please try again.");
-    setTimeout(() => setMessage(""), 3000);
-    setLoading(false);
-  }
-};
+    // Fallback
+    if (dayType === "weekday") {
+      return timeSlot === "morning" ? 25000 : 35000;
+    } else {
+      return timeSlot === "morning" ? 35000 : 45000;
+    }
+  };
+
+  const getTimeSlotLabel = (date: Date, timeSlot: "morning" | "night") => {
+    const dayType = getDayType(date);
+    if (dayType === "weekday") {
+      return timeSlot === "morning" ? "Weekday Morning" : "Weekday Night";
+    } else {
+      return timeSlot === "morning" ? "Weekend Morning" : "Weekend Night";
+    }
+  };
+
+  const getDateStatus = (day: number) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (date < today) return "past";
+    
+    const morningBlocked = isSlotBlocked(dateStr, "morning");
+    const nightBlocked = isSlotBlocked(dateStr, "night");
+    
+    if (morningBlocked && nightBlocked) return "fully-booked";
+    if (morningBlocked || nightBlocked) return "partial";
+    return "available";
+  };
 
   const getDaysInMonth = () => {
     const year = currentDate.getFullYear();
@@ -166,295 +175,305 @@ const handleBooking = async () => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
-    
-    // Add empty cells for days before first day of month
-    for (let i = 0; i < firstDay.getDay(); i++) {
-      days.push(null);
-    }
-    
-    // Add days of month
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(i);
-    }
-    
+    for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push(i);
     return days;
-  };
-
-  const isDateAvailable = (day: number) => {
-    const date = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const morningAvailable = availability.find(s => s.date === date && s.timeSlot === "morning")?.available;
-    const nightAvailable = availability.find(s => s.date === date && s.timeSlot === "night")?.available;
-    return morningAvailable || nightAvailable;
-  };
-
-  const isDateFullyBooked = (day: number) => {
-    const date = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const morningAvailable = availability.find(s => s.date === date && s.timeSlot === "morning")?.available;
-    const nightAvailable = availability.find(s => s.date === date && s.timeSlot === "night")?.available;
-    return !morningAvailable && !nightAvailable;
-  };
-
-  const isPastDate = (day: number) => {
-    const checkDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return checkDate < today;
   };
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  const handleCheckAvailability = () => {
+    if (!selectedDate) {
+      setMessage("Please select a date");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+    
+    if (isSlotBlocked(selectedDate, selectedTime)) {
+      setMessage("This time slot is already booked. Please select another date or time.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+    
+    setShowModal(true);
+  };
+
+  const handleBooking = async () => {
+    if (!bookingData.name || !bookingData.email || !bookingData.phone) {
+      setMessage("Please fill all fields");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+    
+    setLoading(true);
+    const selectedDateObj = new Date(selectedDate);
+    const dayType = getDayType(selectedDateObj);
+    const timeText = selectedTime === "morning" ? "Morning (10 AM - 10 PM)" : "Night (10 PM - 10 AM)";
+    const slotLabel = getTimeSlotLabel(selectedDateObj, selectedTime);
+    const totalPrice = getPriceForSlot(selectedDateObj, selectedTime, hours);
+    
+    const messageText = `Hello! I would like to book the farmhouse.%0A%0A📅 Date: ${selectedDate} (${dayType === "weekday" ? "Weekday" : "Weekend"})%0A⏰ Time: ${timeText} (${slotLabel})%0A🕐 Duration: ${hours} hours%0A💰 Total: ₨ ${totalPrice.toLocaleString()}%0A👤 Name: ${bookingData.name}%0A📧 Email: ${bookingData.email}%0A📞 Phone: ${bookingData.phone}%0A%0APlease confirm my booking. Thank you!`;
+    const whatsappUrl = `https://wa.me/${bookingData.phone.replace(/[^0-9]/g, '')}?text=${messageText}`;
+    
+    try {
+      await fetch("/api/calendar-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: bookingData.name,
+          email: bookingData.email,
+          phone: bookingData.phone,
+          booking_date: selectedDate,
+          time_slot: selectedTime,
+          hours: hours,
+          amount: totalPrice,
+          status: "pending"
+        }),
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    }
+    
+    window.open(whatsappUrl, "_blank");
+    setLoading(false);
+    setShowModal(false);
+    setBookingData({ name: "", email: "", phone: "" });
+    setMessage("Booking request sent! Check your WhatsApp.");
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  if (calendarLoading) {
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
+        <div className="w-12 h-12 border-4 border-[#FFD700] border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-gray-500 mt-4">Loading calendar...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <h3 className="text-2xl md:text-3xl font-light text-[#1A2E26]">Check Availability</h3>
-        <p className="text-gray-500 text-sm mt-2">Select your preferred date and time slot</p>
+    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-gradient-to-r from-[#FFD700] to-[#FF8C00] px-6 py-4">
+        <h3 className="text-xl font-semibold text-[#1A2E26] text-center">Check Availability</h3>
       </div>
 
-      {/* Message */}
-      {message && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-center text-sm"
-        >
-          {message}
-        </motion.div>
-      )}
-
-      {/* Calendar Navigation */}
-      <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ChevronDown className="w-5 h-5 rotate-90" />
-        </button>
-        <h4 className="text-lg md:text-xl font-semibold text-[#1A2E26]">
-          {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-        </h4>
-        <button
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ChevronDown className="w-5 h-5 -rotate-90" />
-        </button>
-      </div>
-
-      {/* Week Days Header */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {weekDays.map(day => (
-          <div key={day} className="text-center text-xs md:text-sm font-medium text-gray-500 py-2">
-            {day}
+      <div className="p-6">
+        {message && (
+          <div className="mb-4 p-3 bg-blue-50 text-blue-600 rounded-xl text-center text-sm">
+            {message}
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 mb-6">
-        {getDaysInMonth().map((day, idx) => (
-          <div key={idx} className="aspect-square p-1">
-            {day && (
+        {/* Calendar Navigation */}
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => { setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)); setSelectedDate(""); }} className="p-2 hover:bg-gray-100 rounded-full">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h4 className="text-lg font-semibold text-[#1A2E26]">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h4>
+          <button onClick={() => { setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)); setSelectedDate(""); }} className="p-2 hover:bg-gray-100 rounded-full">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Week Days */}
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {weekDays.map(day => (<div key={day} className="text-center text-xs font-medium text-gray-500 py-2">{day}</div>))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 gap-1 mb-6">
+          {getDaysInMonth().map((day, idx) => {
+            if (day === null) {
+              return <div key={idx} className="aspect-square p-0.5"><div className="w-full h-full"></div></div>;
+            }
+            
+            const status = getDateStatus(day);
+            const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const isSelected = selectedDate === dateStr;
+            
+            let bgClass = "";
+            let textClass = "";
+            let statusLabel = "";
+            let dotColor = "";
+            
+            if (status === "past") {
+              bgClass = "bg-gray-100";
+              textClass = "text-gray-400";
+            } else if (status === "fully-booked") {
+              bgClass = "bg-red-100";
+              textClass = "text-red-700";
+              statusLabel = "Booked";
+            } else if (status === "partial") {
+              bgClass = "bg-amber-100";
+              textClass = "text-amber-700";
+              statusLabel = "Limited";
+            } else if (status === "available") {
+              bgClass = "bg-white hover:bg-[#FFD700]/10 hover:scale-105";
+              textClass = "text-gray-700";
+              dotColor = "bg-green-500";
+            }
+            
+            if (isSelected) {
+              bgClass = "bg-[#FFD700]/30 ring-2 ring-[#FFD700]";
+            }
+            
+            return (
+              <div key={idx} className="aspect-square p-0.5">
+                <button
+                  onClick={() => { 
+                    if (status !== 'past') {
+                      setSelectedDate(dateStr);
+                    }
+                  }}
+                  disabled={status === 'past'}
+                  className={`w-full h-full rounded-xl flex flex-col items-center justify-center text-sm font-medium transition-all ${bgClass} ${textClass}`}
+                >
+                  <span className="text-base">{day}</span>
+                  {dotColor && <div className={`w-1.5 h-1.5 ${dotColor} rounded-full mt-1`}></div>}
+                  {statusLabel && <div className="text-[9px] mt-0.5">{statusLabel}</div>}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap justify-center gap-4 mb-6 text-xs">
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-green-500 rounded-full"></div><span>Available</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-amber-500 rounded-full"></div><span>Limited Slots</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500 rounded-full"></div><span>Fully Booked</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-gray-300 rounded-full"></div><span>Past Date</span></div>
+        </div>
+
+        {/* Time Slot Selection */}
+        {selectedDate && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+            <h4 className="text-sm font-semibold text-[#1A2E26] mb-3">
+              Select Time Slot for {formatDisplayDate(selectedDate)}
+              <span className="text-xs text-gray-500 ml-2">
+                ({getDayType(new Date(selectedDate)) === "weekday" ? "Weekday" : "Weekend"})
+              </span>
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Morning Slot */}
               <button
-                onClick={() => {
-                  if (!isPastDate(day)) {
-                    const date = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    setSelectedDate(date);
-                  }
-                }}
-                disabled={isPastDate(day)}
-                className={`
-                  w-full h-full rounded-xl flex flex-col items-center justify-center text-sm font-medium transition-all
-                  ${isPastDate(day) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-                  ${selectedDate === `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` ? 'ring-2 ring-[#FFD700] bg-[#FFD700]/10' : ''}
-                  ${!isPastDate(day) && isDateFullyBooked(day) ? 'bg-red-50 text-red-500 cursor-not-allowed' : ''}
-                  ${!isPastDate(day) && !isDateFullyBooked(day) && isDateAvailable(day) ? 'hover:bg-[#FFD700]/20 hover:scale-105' : ''}
+                onClick={() => setSelectedTime("morning")}
+                disabled={isSlotBlocked(selectedDate, "morning")}
+                className={`p-3 rounded-xl border-2 transition-all text-left
+                  ${selectedTime === "morning" ? 'border-[#FFD700] bg-[#FFD700]/10' : 'border-gray-200'}
+                  ${isSlotBlocked(selectedDate, "morning") ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'hover:border-[#FFD700]'}
                 `}
               >
-                <span className="text-base md:text-lg">{day}</span>
-                {!isPastDate(day) && isDateAvailable(day) && !isDateFullyBooked(day) && (
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1"></div>
-                )}
-                {!isPastDate(day) && isDateFullyBooked(day) && (
-                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1"></div>
-                )}
+                <div className="flex items-center gap-2 mb-1">
+                  <Sun size={18} className={selectedTime === "morning" ? 'text-[#FF8C00]' : 'text-gray-500'} />
+                  <span className="font-semibold text-sm">Morning</span>
+                </div>
+                <div className="text-xs text-gray-500">10 AM - 10 PM</div>
+                <div className="text-sm font-semibold text-[#FF8C00] mt-1">
+                  ₨ {getTimeSlotPrice(new Date(selectedDate), "morning").toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">{getTimeSlotLabel(new Date(selectedDate), "morning")}</div>
+                {isSlotBlocked(selectedDate, "morning") && <div className="text-xs text-red-500 mt-1">❌ Booked</div>}
               </button>
-            )}
-          </div>
-        ))}
-      </div>
 
-      {/* Time Slot Selection */}
-      {selectedDate && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-xl">
-          <h4 className="text-sm font-semibold text-[#1A2E26] mb-3">Select Time Slot</h4>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { value: "morning", label: "Morning (10 AM - 10 PM)", icon: "☀️", price: "₨ 25,000" },
-              { value: "night", label: "Night (10 PM - 10 AM)", icon: "🌙", price: "₨ 35,000" }
-            ].map((slot) => {
-              const slotAvailable = availability.find(s => s.date === selectedDate && s.timeSlot === slot.value as any)?.available;
-              return (
+              {/* Night Slot */}
+              <button
+                onClick={() => setSelectedTime("night")}
+                disabled={isSlotBlocked(selectedDate, "night")}
+                className={`p-3 rounded-xl border-2 transition-all text-left
+                  ${selectedTime === "night" ? 'border-[#FFD700] bg-[#FFD700]/10' : 'border-gray-200'}
+                  ${isSlotBlocked(selectedDate, "night") ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'hover:border-[#FFD700]'}
+                `}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Moon size={18} className={selectedTime === "night" ? 'text-[#FF8C00]' : 'text-gray-500'} />
+                  <span className="font-semibold text-sm">Night</span>
+                </div>
+                <div className="text-xs text-gray-500">10 PM - 10 AM</div>
+                <div className="text-sm font-semibold text-[#FF8C00] mt-1">
+                  ₨ {getTimeSlotPrice(new Date(selectedDate), "night").toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">{getTimeSlotLabel(new Date(selectedDate), "night")}</div>
+                {isSlotBlocked(selectedDate, "night") && <div className="text-xs text-red-500 mt-1">❌ Booked</div>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Duration Selection */}
+        {selectedDate && selectedTime && !isSlotBlocked(selectedDate, selectedTime) && (
+          <div className="mb-6">
+            <label className="text-sm font-semibold text-[#1A2E26] mb-3 block">Duration (Hours)</label>
+            <div className="flex flex-wrap gap-2">
+              {[10, 12, 14, 16, 18, 20, 22, 24].map(h => (
                 <button
-                  key={slot.value}
-                  onClick={() => setSelectedTime(slot.value as any)}
-                  disabled={!slotAvailable}
-                  className={`
-                    p-4 rounded-xl border-2 transition-all text-left
-                    ${selectedTime === slot.value ? 'border-[#FFD700] bg-[#FFD700]/10' : 'border-gray-200'}
-                    ${!slotAvailable ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'hover:border-[#FFD700] cursor-pointer'}
+                  key={h}
+                  onClick={() => setHours(h)}
+                  className={`px-4 py-2 rounded-full border transition-all text-sm
+                    ${hours === h ? 'bg-[#1A2E26] text-white border-[#1A2E26]' : 'border-gray-300 hover:border-[#FFD700]'}
                   `}
                 >
-                  <div className="text-2xl mb-1">{slot.icon}</div>
-                  <div className="font-semibold text-sm text-[#1A2E26]">{slot.label}</div>
-                  <div className="text-xs text-gray-500 mt-1">{slot.price}</div>
-                  {!slotAvailable && <div className="text-xs text-red-500 mt-1">Booked</div>}
-                  {slotAvailable && <div className="text-xs text-green-500 mt-1">Available</div>}
+                  {h} {h === 24 ? 'Hrs' : 'Hrs'}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Duration Selection */}
-      {selectedDate && (
-        <div className="mb-6">
-          <label className="text-sm font-semibold text-[#1A2E26] mb-2 block">Duration (Hours)</label>
-          <div className="flex gap-3 flex-wrap">
-            {[10, 12, 14, 16, 18, 20, 22, 24].map(h => (
-              <button
-                key={h}
-                onClick={() => setHours(h)}
-                className={`
-                  px-4 py-2 rounded-full border transition-all
-                  ${hours === h ? 'bg-[#1A2E26] text-white border-[#1A2E26]' : 'border-gray-300 hover:border-[#FFD700]'}
-                `}
-              >
-                {h} {h === 24 ? 'Hours (Full Day)' : 'Hours'}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Check Availability Button */}
-      <button
-        onClick={checkAvailability}
-        disabled={!selectedDate}
-        className={`
-          w-full py-3 rounded-full font-semibold transition-all
-          ${selectedDate 
-            ? 'bg-gradient-to-r from-[#FFD700] to-[#FF8C00] text-[#1A2E26] hover:shadow-lg hover:scale-105' 
-            : 'bg-gray-200 text-gray-500 cursor-not-allowed'}
-        `}
-      >
-        Check Availability
-      </button>
+        {/* Check Button */}
+        <button
+          onClick={handleCheckAvailability}
+          disabled={!selectedDate || !selectedTime || isSlotBlocked(selectedDate, selectedTime)}
+          className={`w-full py-3 rounded-xl font-semibold transition-all
+            ${selectedDate && selectedTime && !isSlotBlocked(selectedDate, selectedTime) 
+              ? 'bg-gradient-to-r from-[#FFD700] to-[#FF8C00] text-[#1A2E26] hover:shadow-lg hover:scale-[1.02]' 
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'}
+          `}
+        >
+          Check Availability
+        </button>
+      </div>
 
       {/* Booking Modal */}
       <AnimatePresence>
-        {showBookingModal && selectedSlot && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center p-4"
-            onClick={() => setShowBookingModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
+        {showModal && selectedDate && selectedTime && !isSlotBlocked(selectedDate, selectedTime) && (
+          <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold text-[#1A2E26]">
-                    {selectedSlot.available ? "Book Your Stay" : "Not Available"}
-                  </h3>
-                  <button onClick={() => setShowBookingModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                    <X className="w-5 h-5" />
-                  </button>
+                  <h3 className="text-xl font-semibold text-[#1A2E26]">Complete Your Booking</h3>
+                  <button onClick={() => setShowModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
                 </div>
 
-                {selectedSlot.available ? (
-                  <>
-                    <div className="bg-green-50 p-4 rounded-xl mb-4">
-                      <div className="flex items-center gap-2 text-green-700 mb-2">
-                        <Check className="w-5 h-5" />
-                        <span className="font-semibold">Available!</span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        📅 Date: {selectedSlot.date}<br />
-                        ⏰ Time: {selectedSlot.timeSlot === "morning" ? "Morning (10 AM - 10 PM)" : "Night (10 PM - 10 AM)"}<br />
-                        🕐 Duration: {hours} hours<br />
-                        💰 Total: ₨ {hours === 24 ? (selectedSlot.timeSlot === "morning" ? "55,000" : "65,000") : (selectedSlot.timeSlot === "morning" ? "25,000" : "35,000")}
-                      </p>
-                    </div>
-
-                    <div className="space-y-3 mb-6">
-                      <input
-                        type="text"
-                        placeholder="Your Full Name"
-                        value={bookingData.name}
-                        onChange={(e) => setBookingData({ ...bookingData, name: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
-                        required
-                      />
-                      <input
-                        type="email"
-                        placeholder="Your Email"
-                        value={bookingData.email}
-                        onChange={(e) => setBookingData({ ...bookingData, email: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
-                        required
-                      />
-                      <input
-                        type="tel"
-                        placeholder="Your Phone Number"
-                        value={bookingData.phone}
-                        onChange={(e) => setBookingData({ ...bookingData, phone: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
-                        required
-                      />
-                    </div>
-
-                    <button
-                      onClick={handleBooking}
-                      disabled={loading}
-                      className="w-full py-3 rounded-full bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
-                    >
-                      {loading ? (
-                        "Processing..."
-                      ) : (
-                        <>
-                          <MessageCircle className="w-5 h-5" />
-                          Book Now via WhatsApp
-                        </>
-                      )}
-                    </button>
-                    <p className="text-xs text-gray-500 text-center mt-3">
-                      You will be redirected to WhatsApp to confirm your booking
-                    </p>
-                  </>
-                ) : (
-                  <div className="bg-red-50 p-4 rounded-xl mb-4">
-                    <div className="flex items-center gap-2 text-red-700 mb-2">
-                      <AlertCircle className="w-5 h-5" />
-                      <span className="font-semibold">Not Available</span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      This time slot is already booked. Please select another date or time slot.
-                    </p>
+                <div className="bg-green-50 p-4 rounded-xl mb-4 border border-green-200">
+                  <div className="flex items-center gap-2 text-green-700 mb-2"><Check className="w-5 h-5" /><span className="font-semibold">Available! Complete your booking</span></div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>📅 Date: {formatDisplayDate(selectedDate)} ({getDayType(new Date(selectedDate)) === "weekday" ? "Weekday" : "Weekend"})</p>
+                    <p>⏰ Time: {selectedTime === "morning" ? "Morning (10 AM - 10 PM)" : "Night (10 PM - 10 AM)"}</p>
+                    <p>🕐 Duration: {hours} hours</p>
+                    <p>💰 Total: ₨ {getPriceForSlot(new Date(selectedDate), selectedTime, hours).toLocaleString()}</p>
                   </div>
-                )}
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <input type="text" placeholder="Your Full Name" value={bookingData.name} onChange={(e) => setBookingData({ ...bookingData, name: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]" required />
+                  <input type="email" placeholder="Your Email" value={bookingData.email} onChange={(e) => setBookingData({ ...bookingData, email: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]" required />
+                  <input type="tel" placeholder="Your Phone Number" value={bookingData.phone} onChange={(e) => setBookingData({ ...bookingData, phone: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]" required />
+                </div>
+
+                <button onClick={handleBooking} disabled={loading} className="w-full py-3 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all">
+                  {loading ? "Processing..." : <><MessageCircle className="w-5 h-5" /> Confirm Booking via WhatsApp</>}
+                </button>
+                <p className="text-xs text-gray-500 text-center mt-3">You'll be redirected to WhatsApp to confirm your booking</p>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
