@@ -3,7 +3,6 @@ import { query } from "@/lib/db";
 
 export async function GET() {
   try {
-    // Create table if not exists
     await query(`
       CREATE TABLE IF NOT EXISTS blocked_dates (
         id SERIAL PRIMARY KEY,
@@ -22,7 +21,6 @@ export async function GET() {
       ORDER BY booking_date ASC
     `);
     
-    console.log("Blocked dates fetched:", result.rows);
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error("Error fetching blocked dates:", error);

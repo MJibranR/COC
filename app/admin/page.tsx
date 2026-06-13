@@ -238,6 +238,14 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [calendarPrices, setCalendarPrices] = useState({
+  weekdayMorning10: 25000,
+  weekdayNight10: 35000,
+  weekendMorning10: 35000,
+  weekendNight10: 45000,
+  twentyTwoHours: 85000
+  });
+  const [pricesLoading, setPricesLoading] = useState(true);
   const [villas, setVillas] = useState<Villa[]>([]);
   const [pricingData, setPricingData] = useState<PricingData>({
   id: 1,
@@ -439,6 +447,7 @@ useEffect(() => {
     fetchCalendarBookings();
     fetchPricingData();
     fetchBlockedDates();
+     fetchCalendarPrices();
   }
 }, []);
 
@@ -510,6 +519,39 @@ useEffect(() => {
       }
     }
   };
+  
+  const fetchCalendarPrices = async () => {
+  try {
+    const res = await fetch("/api/calendar-prices");
+    const data = await res.json();
+    if (data) {
+      setCalendarPrices({
+        weekdayMorning10: data.weekdayMorning10 || 25000,
+        weekdayNight10: data.weekdayNight10 || 35000,
+        weekendMorning10: data.weekendMorning10 || 35000,
+        weekendNight10: data.weekendNight10 || 45000,
+        twentyTwoHours: data.twentyTwoHours || 85000
+      });
+    }
+  } catch (error) {
+    console.error("Error fetching calendar prices:", error);
+  } finally {
+    setPricesLoading(false);
+  }
+};
+
+const saveCalendarPrices = async () => {
+  try {
+    await fetch("/api/calendar-prices", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(calendarPrices)
+    });
+    showToast("Calendar prices saved successfully!");
+  } catch (error) {
+    showToast("Failed to save prices", "error");
+  }
+};
 
   const fetchBlockedDates = async () => {
     try {
@@ -1110,6 +1152,7 @@ const removeFacility = (index: number) => {
                 { id: "pricing", icon: DollarSign, label: "Pricing" },
                 { id: "calendar-bookings", icon: Calendar, label: "Calendar Bookings", count: calendarBookings.length },
                 { id: "blocked-dates", icon: Calendar, label: "Blocked Dates", count: blockedDates.length },
+                { id: "calendar-prices", icon: DollarSign, label: "Calendar Prices" },
                 { id: "contact", icon: Mail, label: "Contact" },
                 { id: "footer", icon: Layout, label: "Footer" },
                 { id: "colors", icon: Palette, label: "Colors & Styling" },
@@ -1662,6 +1705,136 @@ const removeFacility = (index: number) => {
         </div>
       </div>
     )}
+  </div>
+)}
+
+{/* Calendar Prices Tab */}
+{activeTab === "calendar-prices" && (
+  <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="flex justify-between items-center mb-6">
+      <h3 className="text-xl font-semibold flex items-center gap-2">
+        <DollarSign size={24} className="text-[#FF8C00]" /> Calendar Booking Prices
+      </h3>
+      <button
+        onClick={saveCalendarPrices}
+        className="px-4 py-2 bg-[#1A2E26] text-white rounded-lg hover:bg-[#2D4A3E] flex items-center gap-2"
+      >
+        <Save size={16} /> Save Prices
+      </button>
+    </div>
+
+    <p className="text-gray-600 mb-6">
+      Set the prices for 10-hour and 22-hour bookings. These prices will be reflected in the booking calendar.
+    </p>
+
+    <div className="grid md:grid-cols-2 gap-6">
+      {/* Weekday Morning 10 Hours */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">☀️</span>
+          <h4 className="font-semibold text-[#1A2E26]">Weekday Morning (10 Hours)</h4>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Monday - Thursday, 10 AM - 10 PM</p>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">₨</span>
+          <input
+            type="number"
+            value={calendarPrices.weekdayMorning10}
+            onChange={(e) => setCalendarPrices({ ...calendarPrices, weekdayMorning10: parseInt(e.target.value) || 0 })}
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+          <span className="text-gray-500 text-sm">per night</span>
+        </div>
+      </div>
+
+      {/* Weekday Night 10 Hours */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">🌙</span>
+          <h4 className="font-semibold text-[#1A2E26]">Weekday Night (10 Hours)</h4>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Monday - Thursday, 10 PM - 10 AM</p>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">₨</span>
+          <input
+            type="number"
+            value={calendarPrices.weekdayNight10}
+            onChange={(e) => setCalendarPrices({ ...calendarPrices, weekdayNight10: parseInt(e.target.value) || 0 })}
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+          <span className="text-gray-500 text-sm">per night</span>
+        </div>
+      </div>
+
+      {/* Weekend Morning 10 Hours */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">☀️</span>
+          <h4 className="font-semibold text-[#1A2E26]">Weekend Morning (10 Hours)</h4>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Friday - Sunday, 10 AM - 10 PM</p>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">₨</span>
+          <input
+            type="number"
+            value={calendarPrices.weekendMorning10}
+            onChange={(e) => setCalendarPrices({ ...calendarPrices, weekendMorning10: parseInt(e.target.value) || 0 })}
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+          <span className="text-gray-500 text-sm">per night</span>
+        </div>
+      </div>
+
+      {/* Weekend Night 10 Hours */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">🌙</span>
+          <h4 className="font-semibold text-[#1A2E26]">Weekend Night (10 Hours)</h4>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Friday - Sunday, 10 PM - 10 AM</p>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">₨</span>
+          <input
+            type="number"
+            value={calendarPrices.weekendNight10}
+            onChange={(e) => setCalendarPrices({ ...calendarPrices, weekendNight10: parseInt(e.target.value) || 0 })}
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+          <span className="text-gray-500 text-sm">per night</span>
+        </div>
+      </div>
+
+      {/* 22 Hours */}
+      <div className="p-4 bg-gray-50 rounded-xl md:col-span-2">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">⏰</span>
+          <h4 className="font-semibold text-[#1A2E26]">22 Hours Booking</h4>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">Any 22-hour slot (Day or Night)</p>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">₨</span>
+          <input
+            type="number"
+            value={calendarPrices.twentyTwoHours}
+            onChange={(e) => setCalendarPrices({ ...calendarPrices, twentyTwoHours: parseInt(e.target.value) || 0 })}
+            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-[#FF8C00]"
+          />
+          <span className="text-gray-500 text-sm">per booking</span>
+        </div>
+      </div>
+    </div>
+
+    {/* Price Summary */}
+    <div className="mt-6 p-4 bg-[#FFD700]/10 rounded-xl">
+      <h4 className="font-semibold text-[#1A2E26] mb-2">📊 Price Summary</h4>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+        <div><span className="text-gray-500">Weekday Morning:</span> <span className="font-semibold">₨ {calendarPrices.weekdayMorning10.toLocaleString()}</span></div>
+        <div><span className="text-gray-500">Weekday Night:</span> <span className="font-semibold">₨ {calendarPrices.weekdayNight10.toLocaleString()}</span></div>
+        <div><span className="text-gray-500">Weekend Morning:</span> <span className="font-semibold">₨ {calendarPrices.weekendMorning10.toLocaleString()}</span></div>
+        <div><span className="text-gray-500">Weekend Night:</span> <span className="font-semibold">₨ {calendarPrices.weekendNight10.toLocaleString()}</span></div>
+        <div><span className="text-gray-500">22 Hours:</span> <span className="font-semibold">₨ {calendarPrices.twentyTwoHours.toLocaleString()}</span></div>
+      </div>
+    </div>
   </div>
 )}
 

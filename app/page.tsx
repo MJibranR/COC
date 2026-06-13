@@ -299,7 +299,7 @@ function PricingSectionComponent() {
   );
 }
 
-// Booking Calendar Component - Complete Working Version
+// Booking Calendar Component - Fixed with proper 22-hour pricing
 function BookingCalendarComponent() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState("");
@@ -311,8 +311,53 @@ function BookingCalendarComponent() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [calendarLoading, setCalendarLoading] = useState(true);
+  const [calendarPrices, setCalendarPrices] = useState({
+    weekdayMorning10: 25000,
+    weekdayNight10: 35000,
+    weekendMorning10: 35000,
+    weekendNight10: 45000,
+    twentyTwoHours: 85000
+  });
 
-  // Fetch blocked dates on component mount
+  // Helper function to determine day type
+  const getDayType = (date: Date) => {
+    const day = date.getDay();
+    return (day >= 1 && day <= 4) ? "weekday" : "weekend";
+  };
+
+  // Get price for selected slot
+  const getPriceForSlot = (date: Date, timeSlot: "morning" | "night", hoursCount: number) => {
+    // For 22 hours booking - ALWAYS use twentyTwoHours price
+    if (hoursCount === 22) {
+      console.log("22 Hours price:", calendarPrices.twentyTwoHours);
+      return calendarPrices.twentyTwoHours;
+    }
+    
+    // For 10 hours booking - use day-specific pricing
+    const dayType = getDayType(date);
+    if (dayType === "weekday") {
+      return timeSlot === "morning" ? calendarPrices.weekdayMorning10 : calendarPrices.weekdayNight10;
+    } else {
+      return timeSlot === "morning" ? calendarPrices.weekendMorning10 : calendarPrices.weekendNight10;
+    }
+  };
+
+  // Get 22 hours price directly
+  const getTwentyTwoHoursPrice = () => {
+    return calendarPrices.twentyTwoHours;
+  };
+
+  // Get 10 hours price for display
+  const getTenHoursPrice = (date: Date, timeSlot: "morning" | "night") => {
+    const dayType = getDayType(date);
+    if (dayType === "weekday") {
+      return timeSlot === "morning" ? calendarPrices.weekdayMorning10 : calendarPrices.weekdayNight10;
+    } else {
+      return timeSlot === "morning" ? calendarPrices.weekendMorning10 : calendarPrices.weekendNight10;
+    }
+  };
+
+  // Fetch blocked dates
   useEffect(() => {
     const loadBlockedDates = async () => {
       try {
@@ -323,27 +368,42 @@ function BookingCalendarComponent() {
       } catch (error) {
         console.error("Error loading blocked dates:", error);
         setBlockedDates([]);
-      } finally {
-        setCalendarLoading(false);
       }
     };
     
     loadBlockedDates();
+    fetchCalendarPrices();
   }, []);
+
+  // Fetch calendar prices from API
+  const fetchCalendarPrices = async () => {
+    try {
+      const res = await fetch("/api/calendar-prices");
+      const data = await res.json();
+      console.log("Fetched calendar prices:", data);
+      if (data) {
+        setCalendarPrices({
+          weekdayMorning10: data.weekdayMorning10 || 25000,
+          weekdayNight10: data.weekdayNight10 || 35000,
+          weekendMorning10: data.weekendMorning10 || 35000,
+          weekendNight10: data.weekendNight10 || 45000,
+          twentyTwoHours: data.twentyTwoHours || 85000
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching calendar prices:", error);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
 
   // Helper: Format date to YYYY-MM-DD for comparison
   const formatDateKey = (date: Date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  // Helper: Parse date string to Date object
-  const parseDate = (dateStr: string) => {
-    return new Date(dateStr);
-  };
-
   // Check if a specific date and time slot is blocked
   const isSlotBlocked = (dateStr: string, timeSlot: string) => {
-    // Convert the input date string to the same format for comparison
     const inputDate = new Date(dateStr);
     const inputDateKey = formatDateKey(inputDate);
     
@@ -409,9 +469,14 @@ function BookingCalendarComponent() {
     }
     
     setLoading(true);
+    const selectedDateObj = new Date(selectedDate);
+    const totalPrice = getPriceForSlot(selectedDateObj, selectedTime, hours);
     const timeText = selectedTime === "morning" ? "Morning (8 AM - 6 PM)" : "Night (8 PM - 6 AM)";
-    const price = selectedTime === "morning" ? (hours === 24 ? "55,000" : "25,000") : (hours === 24 ? "65,000" : "35,000");
-    const messageText = `Hello! I would like to book the farmhouse.%0A%0A📅 Date: ${selectedDate}%0A⏰ Time: ${timeText}%0A🕐 Duration: ${hours} hours%0A💰 Total: ₨ ${price}%0A👤 Name: ${bookingData.name}%0A📧 Email: ${bookingData.email}%0A📞 Phone: ${bookingData.phone}%0A%0APlease confirm my booking. Thank you!`;
+    const dayType = getDayType(selectedDateObj);
+    const slotLabel = selectedTime === "morning" ? (dayType === "weekday" ? "Weekday Morning" : "Weekend Morning") : (dayType === "weekday" ? "Weekday Night" : "Weekend Night");
+    const durationText = hours === 22 ? "22 Hours" : "10 Hours";
+    
+    const messageText = `Hello! I would like to book the farmhouse.%0A%0A📅 Date: ${selectedDate} (${dayType === "weekday" ? "Weekday" : "Weekend"})%0A⏰ Time: ${timeText} (${slotLabel})%0A🕐 Duration: ${durationText}%0A💰 Total: ₨ ${totalPrice.toLocaleString()}%0A👤 Name: ${bookingData.name}%0A📧 Email: ${bookingData.email}%0A📞 Phone: ${bookingData.phone}%0A%0APlease confirm my booking. Thank you!`;
     const whatsappUrl = `https://wa.me/${bookingData.phone.replace(/[^0-9]/g, '')}?text=${messageText}`;
     
     try {
@@ -425,6 +490,7 @@ function BookingCalendarComponent() {
           booking_date: selectedDate,
           time_slot: selectedTime,
           hours: hours,
+          amount: totalPrice,
           status: "pending"
         }),
       });
@@ -455,6 +521,10 @@ function BookingCalendarComponent() {
       </div>
     );
   }
+
+  // Get display prices
+  const displayPrice10 = selectedDate ? getTenHoursPrice(new Date(selectedDate), selectedTime) : 0;
+  const displayPrice22 = getTwentyTwoHoursPrice();
 
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -562,10 +632,18 @@ function BookingCalendarComponent() {
                   ${isSlotBlocked(selectedDate, "morning") ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'hover:border-[#FFD700]'}
                 `}
               >
-                <div className="flex items-center gap-2 mb-1"><span className="text-xl">☀️</span><span className="font-semibold text-sm">Morning</span></div>
-                <div className="text-xs text-gray-500">8 AM - 6 PM</div>
-                <div className="text-sm font-semibold text-[#FF8C00] mt-1">₨ 25,000</div>
-                {isSlotBlocked(selectedDate, "morning") && <div className="text-xs text-red-500 mt-1">❌ Currently Booked</div>}
+                <div className="flex items-center gap-2 mb-1">
+                  <Sun size={18} className={selectedTime === "morning" ? 'text-[#FF8C00]' : 'text-gray-500'} />
+                  <span className="font-semibold text-sm">Morning</span>
+                </div>
+                <div className="text-xs text-gray-500">8 AM - 6 PM (10 Hours)</div>
+                <div className="text-sm font-semibold text-[#FF8C00] mt-1">
+                  ₨ {displayPrice10.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {getDayType(new Date(selectedDate)) === "weekday" ? "Weekday" : "Weekend"} Rate
+                </div>
+                {isSlotBlocked(selectedDate, "morning") && <div className="text-xs text-red-500 mt-1">❌ Booked</div>}
               </button>
               <button
                 onClick={() => setSelectedTime("night")}
@@ -575,25 +653,50 @@ function BookingCalendarComponent() {
                   ${isSlotBlocked(selectedDate, "night") ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'hover:border-[#FFD700]'}
                 `}
               >
-                <div className="flex items-center gap-2 mb-1"><span className="text-xl">🌙</span><span className="font-semibold text-sm">Night</span></div>
-                <div className="text-xs text-gray-500">8 PM - 6 AM</div>
-                <div className="text-sm font-semibold text-[#FF8C00] mt-1">₨ 35,000</div>
-                {isSlotBlocked(selectedDate, "night") && <div className="text-xs text-red-500 mt-1">❌ Currently Booked</div>}
+                <div className="flex items-center gap-2 mb-1">
+                  <Moon size={18} className={selectedTime === "night" ? 'text-[#FF8C00]' : 'text-gray-500'} />
+                  <span className="font-semibold text-sm">Night</span>
+                </div>
+                <div className="text-xs text-gray-500">8 PM - 6 AM (10 Hours)</div>
+                <div className="text-sm font-semibold text-[#FF8C00] mt-1">
+                  ₨ {displayPrice10.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {getDayType(new Date(selectedDate)) === "weekday" ? "Weekday" : "Weekend"} Rate
+                </div>
+                {isSlotBlocked(selectedDate, "night") && <div className="text-xs text-red-500 mt-1">❌ Booked</div>}
               </button>
             </div>
           </div>
         )}
 
-        {/* Duration Selection */}
+        {/* Duration Selection - Only 10 Hours and 22 Hours */}
         {selectedDate && selectedTime && !isSlotBlocked(selectedDate, selectedTime) && (
           <div className="mb-6">
-            <label className="text-sm font-semibold text-black mb-3 block">Duration (Hours)</label>
-            <div className="flex flex-wrap gap-2">
-              {[10, 22].map(h => (
-                <button key={h} onClick={() => setHours(h)} className={`px-4 py-2 rounded-full border transition-all text-sm
-                  ${hours === h ? 'bg-[#1A2E26] text-white border-[#1A2E26]' : 'border-gray-300 hover:border-[#FFD700]'}
-                `}>{h} {h === 24 ? 'Hrs' : 'Hrs'}</button>
-              ))}
+            <label className="text-sm font-semibold text-black mb-3 block">Select Duration</label>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setHours(10)}
+                className={`px-6 py-3 rounded-full border-2 transition-all text-sm font-semibold flex-1
+                  ${hours === 10 ? 'bg-[#1A2E26] text-white border-[#1A2E26] shadow-md' : 'border-gray-300 hover:border-[#FFD700] bg-white'}
+                `}
+              >
+                <div>10 Hours</div>
+                <div className="text-xs opacity-80 mt-1">
+                  ₨ {displayPrice10.toLocaleString()}
+                </div>
+              </button>
+              <button
+                onClick={() => setHours(22)}
+                className={`px-6 py-3 rounded-full border-2 transition-all text-sm font-semibold flex-1
+                  ${hours === 22 ? 'bg-[#1A2E26] text-white border-[#1A2E26] shadow-md' : 'border-gray-300 hover:border-[#FFD700] bg-white'}
+                `}
+              >
+                <div>22 Hours</div>
+                <div className="text-xs opacity-80 mt-1">
+                  ₨ {displayPrice22.toLocaleString()}
+                </div>
+              </button>
             </div>
           </div>
         )}
@@ -626,10 +729,10 @@ function BookingCalendarComponent() {
                 <div className="bg-green-50 p-4 rounded-xl mb-4 border border-green-200">
                   <div className="flex items-center gap-2 text-green-700 mb-2"><Check className="w-5 h-5" /><span className="font-semibold">Available! Complete your booking</span></div>
                   <div className="space-y-1 text-sm text-gray-600">
-                    <p>📅 Date: {formatDisplayDate(selectedDate)}</p>
+                    <p>📅 Date: {formatDisplayDate(selectedDate)} ({getDayType(new Date(selectedDate)) === "weekday" ? "Weekday" : "Weekend"})</p>
                     <p>⏰ Time: {selectedTime === "morning" ? "Morning (8 AM - 6 PM)" : "Night (8 PM - 6 AM)"}</p>
-                    <p>🕐 Duration: {hours} hours</p>
-                    <p>💰 Total: ₨ {selectedTime === "morning" ? (hours === 24 ? "55,000" : "25,000") : (hours === 24 ? "65,000" : "35,000")}</p>
+                    <p>🕐 Duration: {hours} {hours === 22 ? 'Hours' : 'Hours'}</p>
+                    <p>💰 Total: ₨ {getPriceForSlot(new Date(selectedDate), selectedTime, hours).toLocaleString()}</p>
                   </div>
                 </div>
 

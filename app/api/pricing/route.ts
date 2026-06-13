@@ -3,7 +3,6 @@ import { query } from "@/lib/db";
 
 export async function GET() {
   try {
-    // Ensure table exists
     await query(`
       CREATE TABLE IF NOT EXISTS pricing (
         id SERIAL PRIMARY KEY,
@@ -21,7 +20,6 @@ export async function GET() {
     const result = await query(`SELECT * FROM pricing LIMIT 1`);
     
     if (result.rows.length === 0) {
-      // Return default data with pricing options
       const defaultData = {
         id: 1,
         title: "Colors of Combine Farm House",
@@ -43,10 +41,8 @@ export async function GET() {
         website: "www.combinegrp.com",
         enabled: true,
         pricingOptions: [
-          { id: "weekday-morning", name: "weekday-morning", label: "Weekday Morning", description: "Monday - Thursday (10 AM - 10 PM)", price: 25000, isTrending: false, enabled: true, icon: "☀️" },
-          { id: "weekend-morning", name: "weekend-morning", label: "Weekend Morning", description: "Friday - Sunday (10 AM - 10 PM)", price: 35000, isTrending: false, enabled: true, icon: "☀️" },
-          { id: "weekday-night", name: "weekday-night", label: "Weekday Night", description: "Monday - Thursday (10 PM - 10 AM)", price: 35000, isTrending: false, enabled: true, icon: "🌙" },
-          { id: "weekend-night", name: "weekend-night", label: "Weekend Night", description: "Friday - Sunday (10 PM - 10 AM)", price: 45000, isTrending: true, enabled: true, icon: "⭐" },
+          { id: "weekday-night", name: "weekday-night", label: "Weekday Night", description: "Monday - Thursday", price: 45000, isTrending: false, enabled: true, icon: "🌙" },
+          { id: "weekend-night", name: "weekend-night", label: "Weekend Night", description: "Friday - Sunday", price: 55000, isTrending: true, enabled: true, icon: "⭐" },
           { id: "22-hours", name: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, isTrending: false, enabled: true, icon: "⏰" }
         ]
       };
@@ -54,20 +50,8 @@ export async function GET() {
     }
     
     const data = result.rows[0];
-    // Parse pricing_options if it's a string
     if (data.pricing_options && typeof data.pricing_options === 'string') {
       data.pricing_options = JSON.parse(data.pricing_options);
-    }
-    
-    // Ensure pricing_options exists
-    if (!data.pricing_options || data.pricing_options.length === 0) {
-      data.pricing_options = [
-        { id: "weekday-morning", name: "weekday-morning", label: "Weekday Morning", description: "Monday - Thursday (10 AM - 10 PM)", price: 25000, isTrending: false, enabled: true, icon: "☀️" },
-        { id: "weekend-morning", name: "weekend-morning", label: "Weekend Morning", description: "Friday - Sunday (10 AM - 10 PM)", price: 35000, isTrending: false, enabled: true, icon: "☀️" },
-        { id: "weekday-night", name: "weekday-night", label: "Weekday Night", description: "Monday - Thursday (10 PM - 10 AM)", price: 35000, isTrending: false, enabled: true, icon: "🌙" },
-        { id: "weekend-night", name: "weekend-night", label: "Weekend Night", description: "Friday - Sunday (10 PM - 10 AM)", price: 45000, isTrending: true, enabled: true, icon: "⭐" },
-        { id: "22-hours", name: "22-hours", label: "22 Hours", description: "Any 22-hour slot", price: 85000, isTrending: false, enabled: true, icon: "⏰" }
-      ];
     }
     
     return NextResponse.json({
@@ -78,7 +62,7 @@ export async function GET() {
       contactNumber: data.contact_number,
       website: data.website,
       enabled: data.enabled,
-      pricingOptions: data.pricing_options
+      pricingOptions: data.pricing_options || []
     });
   } catch (error) {
     console.error("Error fetching pricing:", error);
